@@ -1,0 +1,104 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from ..db import get_db, Provider, ProviderScore, DriftScore, FieldConfidence, AuditLog
+
+router = APIRouter(prefix="/providers", tags=["providers"])
+
+
+@router.get("")
+async def list_providers(db: Session = Depends(get_db)):
+    providers = db.query(Provider).all()
+    result = []
+    for p in providers:
+        score = db.query(ProviderScore).filter(ProviderScore.provider_id == p.id).first()
+        drift = db.query(DriftScore).filter(DriftScore.provider_id == p.id).first()
+        result.append(
+            {
+                "id": p.id,
+                "external_id": p.external_id,
+                "name": p.name,
+                "specialty": p.specialty,
+                "phone": p.phone,
+                "address": p.address,
+                "pcs": score.pcs if score else None,
+                "pcs_band": score.band if score else None,
+                "drift_score": drift.score if drift else None,
+                "drift_bucket": drift.bucket if drift else None,
+            }
+        )
+    return result
+
+
+@router.get("/{provider_id}")
+async def get_provider(provider_id: int, db: Session = Depends(get_db)):
+    provider = db.query(Provider).get(provider_id)
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+    score = db.query(ProviderScore).filter(ProviderScore.provider_id == provider.id).first()
+    drift = db.query(DriftScore).filter(DriftScore.provider_id == provider.id).first()
+    logs = db.query(AuditLog).filter(AuditLog.provider_id == provider.id).order_by(AuditLog.created_at.desc()).all()
+    return {
+        "id": provider.id,
+        "external_id": provider.external_id,
+        "name": provider.name,
+        "phone": provider.phone,
+        "address": provider.address,
+        "specialty": provider.specialty,
+        "license_no": provider.license_no,
+        "license_expiry": provider.license_expiry,
+        "affiliations": provider.affiliations,
+        "last_verified_at": provider.last_verified_at,
+        "score": {
+            "pcs": score.pcs if score else None,
+            "band": score.band if score else None,
+            "srm": score.srm if score else None,
+            "fr": score.fr if score else None,
+            "st": score.st if score else None,
+            "mb": score.mb if score else None,
+            "dq": score.dq if score else None,
+            "rp": score.rp if score else None,
+            "lh": score.lh if score else None,
+            "ha": score.ha if score else None,
+        } if score else None,
+        "drift": {
+            "score": drift.score if drift else None,
+            "bucket": drift.bucket if drift else None,
+            "recommended_next_check_days": drift.recommended_next_check_days if drift else None,
+        } if drift else None,
+        "audit_log": [
+            {
+                "field_name": l.field_name,
+                "old_value": l.old_value,
+                "new_value": l.new_value,
+                "action": l.action,
+                "actor": l.actor,
+                "created_at": l.created_at,
+            }
+            for l in logs
+        ],
+    }
+
+
+@router.get("/{provider_id}/qa")
+async def get_provider_qa(provider_id: int, db: Session = Depends(get_db)):
+    provider = db.query(Provider).get(provider_id)
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+
+    confs = (
+        db.query(FieldConfidence)
+        .filter(FieldConfidence.provider_id == provider.id)
+        .order_by(FieldConfidence.created_at.desc())
+        .all()
+    )
+
+    return [
+        {
+            "field_name": c.field_name,
+            "confidence": c.confidence,
+            "sources": c.sources,
+            "created_at": c.created_at,
+        }
+        for c in confs
+    ]

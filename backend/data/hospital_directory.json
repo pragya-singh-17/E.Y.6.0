@@ -1,0 +1,16 @@
+{
+  "P003": {
+    "phone": "022-55555555",
+    "address": "City Care Clinic, Bandra West, Mumbai",
+    "specialty": "Internal Medicine"
+  },
+  "P004": {
+    "phone": "022-55555556",
+    "address": "Sunrise Hospital, Thane West",
+    "specialty": "Pediatrics"
+  },
+  "P002": {
+    "address": "Sunshine Hospital Bodakdev, Ahmedabad",
+    "phone": "079-40005566"
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "P001": {"phone": "022-41234567", "address": "ABC Heart Clinic, Andheri East, Mumbai", "specialty": "Cardiology", "license_no": "LIC-ROHAN-1", "license_expiry": "2026-06-30"},
+  "P002": {"phone": "079-22223333", "specialty": "Dermatology", "license_no": "LIC-MEERA-1", "license_expiry": "2024-12-31"}
+}

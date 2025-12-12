@@ -1,0 +1,21 @@
+body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f7fb; }
+header { padding: 1rem 2rem; background: #213547; color: white; display: flex; justify-content: space-between; align-items: center; }
+header button { padding: 0.5rem 1rem; }
+.layout { max-width: 1200px; margin: 0 auto; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: min-content; gap: 1rem; padding: 1rem; }
+.card { background: white; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.card h2 { margin-top: 0; }
+.badge { padding: 0.2rem 0.5rem; border-radius: 999px; font-size: 0.8rem; }
+.badge.green { background: #e1f7e3; color: #1b7a2f; }
+.badge.amber { background: #fff4e0; color: #a76a00; }
+.badge.red { background: #fde4e4; color: #b00020; }
+.chip { padding: 0.2rem 0.5rem; border-radius: 999px; font-size: 0.8rem; margin-left: 0.5rem; }
+.chip.drift-low { background: #e0f4ff; color: #005a9e; }
+.chip.drift-medium { background: #fff4e0; color: #a76a00; }
+.chip.drift-high { background: #fde4e4; color: #b00020; }
+.table { width: 100%; }
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th, td { border-bottom: 1px solid #eee; padding: 0.25rem 0.5rem; text-align: left; }
+tr.clickable:hover { background: #f0f4ff; cursor: pointer; }
+button { cursor: pointer; }
+.pcs-breakdown { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 0.25rem 1rem; list-style: none; padding: 0; }
