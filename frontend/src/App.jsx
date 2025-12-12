@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import './styles.css';
 
+// --- Components ---
+
 function Badge({ band, value }) {
   if (value == null) return <span className="badge">N/A</span>;
   return <span className={`badge ${band}`}>PCS {value.toFixed(1)} ({band})</span>;
@@ -12,19 +14,105 @@ function DriftChip({ bucket }) {
   return <span className={`chip drift-${bucket.toLowerCase()}`}>Drift: {bucket}</span>;
 }
 
-function Dashboard({ stats }) {
-  if (!stats) return null;
+function ProgressBar({ value, max = 100, color = '#4caf50' }) {
+  const pct = Math.min(100, Math.max(0, (value / max) * 100));
   return (
-    <div className="card">
-      <h2>Dashboard</h2>
-      <p>Last run: {stats.latest_run.id ? `#${stats.latest_run.id} (${stats.latest_run.type})` : 'No runs yet'}</p>
-      <p>
-        Processed: {stats.latest_run.count_processed} | Auto-updates: {stats.latest_run.auto_updates} | Manual reviews: {stats.latest_run.manual_reviews}
-      </p>
-      <p>Average PCS: {stats.avg_pcs ? stats.avg_pcs.toFixed(1) : 'N/A'}</p>
-      <p>
-        Drift Distribution - Low: {stats.drift_distribution.Low}, Medium: {stats.drift_distribution.Medium}, High: {stats.drift_distribution.High}
-      </p>
+    <div style={{ background: '#eee', borderRadius: '4px', height: '10px', width: '100%' }}>
+      <div style={{ background: color, width: `${pct}%`, height: '100%', borderRadius: '4px' }} />
+    </div>
+  );
+}
+
+function Dashboard({ stats }) {
+  if (!stats) return <div>Loading stats...</div>;
+  
+  const { latest_run, avg_pcs, drift_distribution, pcs_distribution, trend } = stats;
+
+  const maxDrift = Math.max(...Object.values(drift_distribution), 1);
+  const maxPCS = Math.max(...Object.values(pcs_distribution || {}), 1);
+
+  return (
+    <div className="dashboard-container">
+      <div className="card stats-summary">
+        <h2>🚀 System Status</h2>
+        <div className="stat-row">
+          <div className="stat-item">
+            <h3>Last Run</h3>
+            <p>{latest_run.started_at ? new Date(latest_run.started_at).toLocaleString() : 'Never'}</p>
+            <small>{latest_run.type} Batch</small>
+          </div>
+          <div className="stat-item">
+            <h3>Processed</h3>
+            <p>{latest_run.count_processed}</p>
+          </div>
+          <div className="stat-item">
+            <h3>Auto-Updated</h3>
+            <p className="text-success">{latest_run.auto_updates}</p>
+          </div>
+          <div className="stat-item">
+            <h3>Manual Review</h3>
+            <p className="text-warning">{latest_run.manual_reviews}</p>
+          </div>
+          <div className="stat-item">
+            <h3>Avg PCS</h3>
+            <p>{avg_pcs ? avg_pcs.toFixed(1) : 'N/A'}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="charts-grid">
+        <div className="card">
+          <h3>📉 Drift Distribution</h3>
+          <div className="chart-bar-container">
+            {Object.entries(drift_distribution).map(([key, val]) => (
+              <div key={key} className="chart-bar-row">
+                <span className="label">{key}</span>
+                <div className="bar-wrapper">
+                  <div className={`bar drift-${key.toLowerCase()}`} style={{ width: `${(val / maxDrift) * 100}%` }}></div>
+                  <span className="count">{val}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <h3>📊 PCS Distribution</h3>
+          <div className="chart-bar-container">
+            {Object.entries(pcs_distribution || {}).map(([key, val]) => (
+              <div key={key} className="chart-bar-row">
+                <span className="label">{key}</span>
+                <div className="bar-wrapper">
+                  <div className="bar pcs-bar" style={{ width: `${(val / maxPCS) * 100}%`, background: '#2196f3' }}></div>
+                  <span className="count">{val}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="card">
+          <h3>📈 Trend (Last 5 Runs)</h3>
+          <table className="trend-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Auto</th>
+                <th>Manual</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(trend || []).map((t) => (
+                <tr key={t.id}>
+                  <td>{t.date}</td>
+                  <td>{t.auto_updates}</td>
+                  <td>{t.manual_reviews}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -32,25 +120,29 @@ function Dashboard({ stats }) {
 function ProviderList({ providers, onSelect }) {
   return (
     <div className="card">
-      <h2>Providers</h2>
-      <table>
+      <h2>🏥 Provider Directory</h2>
+      <table className="data-table">
         <thead>
           <tr>
             <th>ID</th>
             <th>Name</th>
             <th>Specialty</th>
-            <th>PCS</th>
-            <th>Drift</th>
+            <th>Phone</th>
+            <th>PCS Score</th>
+            <th>Drift Risk</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
           {providers.map((p) => (
-            <tr key={p.id} onClick={() => onSelect(p.id)} className="clickable">
+            <tr key={p.id} onClick={() => onSelect(p.id)} className="clickable-row">
               <td>{p.id}</td>
               <td>{p.name}</td>
               <td>{p.specialty}</td>
+              <td>{p.phone}</td>
               <td><Badge band={p.pcs_band} value={p.pcs} /></td>
               <td><DriftChip bucket={p.drift_bucket} /></td>
+              <td><button className="btn-small">View Details</button></td>
             </tr>
           ))}
         </tbody>
@@ -59,54 +151,138 @@ function ProviderList({ providers, onSelect }) {
   );
 }
 
-function ProviderDetail({ provider, qa }) {
-  if (!provider) return null;
-  const score = provider.score || {};
-  const drift = provider.drift || {};
+function ProviderDetail({ providerId, onBack }) {
+  const [data, setData] = useState(null);
+  const [ocr, setOcr] = useState(null);
+
+  useEffect(() => {
+    if (!providerId) return;
+    axios.get(`/providers/${providerId}/details`).then(res => setData(res.data));
+    axios.get(`/providers/${providerId}/ocr`).then(res => setOcr(res.data));
+  }, [providerId]);
+
+  if (!data) return <div>Loading details...</div>;
+
+  const { provider, validation, pcs, drift } = data;
+
   return (
-    <div className="card">
-      <h2>Provider Detail: {provider.name}</h2>
-      <p>{provider.specialty} | {provider.address}</p>
-      <Badge band={score.band} value={score.pcs} />
-      <DriftChip bucket={drift.bucket} />
-      <h3>PCS Breakdown</h3>
-      <ul className="pcs-breakdown">
-        <li>SRM: {score.srm?.toFixed(2)}</li>
-        <li>FR: {score.fr?.toFixed(2)}</li>
-        <li>ST: {score.st?.toFixed(2)}</li>
-        <li>MB: {score.mb?.toFixed(2)}</li>
-        <li>DQ: {score.dq?.toFixed(2)}</li>
-        <li>RP: {score.rp?.toFixed(2)}</li>
-        <li>LH: {score.lh?.toFixed(2)}</li>
-        <li>HA: {score.ha?.toFixed(2)}</li>
-      </ul>
-      <h3>Field-level confidence</h3>
-      <table>
-        <thead>
-          <tr>
-            <th>Field</th>
-            <th>Confidence</th>
-            <th>Sources</th>
-          </tr>
-        </thead>
-        <tbody>
-          {qa.map((c, idx) => (
-            <tr key={idx}>
-              <td>{c.field_name}</td>
-              <td>{c.confidence.toFixed(2)}</td>
-              <td>{(c.sources || []).join(', ')}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <h3>Audit log</h3>
-      <ul>
-        {provider.audit_log.map((l, idx) => (
-          <li key={idx}>
-            [{l.created_at}] {l.action} {l.field_name}: {l.old_value} → {l.new_value}
-          </li>
-        ))}
-      </ul>
+    <div className="detail-container">
+      <button onClick={onBack} className="btn-back">← Back to Directory</button>
+      
+      <div className="header-card card">
+        <div className="header-info">
+          <h1>{provider.name}</h1>
+          <p>{provider.specialty} | {provider.address}</p>
+          <div className="badges">
+            <Badge band={pcs?.band} value={pcs?.score} />
+            <DriftChip bucket={drift?.bucket} />
+          </div>
+        </div>
+        <div className="drift-explanation">
+          <strong>Drift Analysis:</strong> {drift?.explanation}
+        </div>
+      </div>
+
+      <div className="detail-grid">
+        {/* Left Column: Validation & OCR */}
+        <div className="left-col">
+          <div className="card">
+            <h3>✅ Validated Data & Confidence</h3>
+            <table className="validation-table">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Value</th>
+                  <th>Confidence</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(validation).map(([field, info]) => (
+                  <tr key={field}>
+                    <td>{field}</td>
+                    <td>{provider[field]}</td>
+                    <td>
+                      <div className="confidence-wrapper">
+                        <ProgressBar value={info.confidence * 100} color={info.confidence >= 0.7 ? '#4caf50' : '#ff9800'} />
+                        <span>{(info.confidence * 100).toFixed(0)}%</span>
+                      </div>
+                    </td>
+                    <td>
+                      {info.confidence >= 0.7 ? 
+                        <span className="badge-green">Auto-Updated</span> : 
+                        <span className="badge-red">Manual Review</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="card">
+            <h3>📄 Document Extraction Panel (OCR)</h3>
+            {ocr && ocr.exists ? (
+              <div className="ocr-panel">
+                <div className="ocr-meta">
+                  <span><strong>Type:</strong> {ocr.doc_type}</span>
+                  <span><strong>Confidence:</strong> {(ocr.ocr_confidence * 100).toFixed(1)}%</span>
+                </div>
+                <div className="ocr-preview">
+                  <pre>{ocr.ocr_text}</pre>
+                </div>
+              </div>
+            ) : (
+              <p>No documents found for this provider.</p>
+            )}
+          </div>
+          
+          <div className="card">
+             <h3>🔍 Source Comparison</h3>
+             <p>Reliability Weights: NPI (High), State Board (High), Hospital (Med), Maps (Low)</p>
+             <table className="source-table">
+                <thead>
+                    <tr>
+                        <th>Field</th>
+                        <th>Source</th>
+                        <th>Value Found</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {Object.entries(validation).map(([field, info]) => (
+                        (info.sources || []).map((src, idx) => (
+                            <tr key={`${field}-${idx}`}>
+                                <td>{field}</td>
+                                <td>{src.source}</td>
+                                <td>{src.value}</td>
+                            </tr>
+                        ))
+                    ))}
+                </tbody>
+             </table>
+          </div>
+        </div>
+
+        {/* Right Column: PCS Breakdown */}
+        <div className="right-col">
+          <div className="card">
+            <h3>🛡️ PCS Breakdown</h3>
+            <div className="pcs-grid">
+              {Object.entries(pcs?.components || {}).map(([key, val]) => (
+                <div key={key} className="pcs-item">
+                  <span className="pcs-label">{key.toUpperCase()}</span>
+                  <ProgressBar value={val} max={100} color="#2196f3" />
+                  <span className="pcs-val">{val.toFixed(0)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="pcs-legend">
+              <small>SRM: Source Reliability | FR: Freshness | ST: Stability | MB: Mismatch Burden</small>
+              <small>DQ: Doc Quality | RP: Responsiveness | LH: License Health | HA: History</small>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -114,114 +290,129 @@ function ProviderDetail({ provider, qa }) {
 function ManualReview({ items, onAction }) {
   return (
     <div className="card">
-      <h2>Manual Review Queue</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Provider</th>
-            <th>Field</th>
-            <th>Current</th>
-            <th>Suggested</th>
-            <th>Reason</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((i) => (
-            <tr key={i.id}>
-              <td>{i.id}</td>
-              <td>{i.provider_id}</td>
-              <td>{i.field_name}</td>
-              <td>{i.current_value}</td>
-              <td>{i.suggested_value}</td>
-              <td>{i.reason}</td>
-              <td>{i.status}</td>
-              <td>
-                <button onClick={() => onAction(i.id, 'approve')}>Approve</button>
-                <button onClick={() => {
-                  const value = window.prompt('Override value', i.suggested_value || '');
-                  if (value != null) onAction(i.id, 'override', value);
-                }}>Override</button>
-              </td>
+      <h2>📝 Manual Review Queue</h2>
+      {items.length === 0 ? <p>No items pending review.</p> : (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Provider ID</th>
+              <th>Field</th>
+              <th>Current Value</th>
+              <th>Suggested Value</th>
+              <th>Reason</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((i) => (
+              <tr key={i.id}>
+                <td>{i.id}</td>
+                <td>{i.provider_id}</td>
+                <td>{i.field_name}</td>
+                <td className="text-strike">{i.current_value}</td>
+                <td className="text-highlight">{i.suggested_value}</td>
+                <td>{i.reason}</td>
+                <td className="actions-cell">
+                  <button className="btn-approve" onClick={() => onAction(i.id, 'approve')}>Approve</button>
+                  <button className="btn-override" onClick={() => {
+                    const val = window.prompt('Enter override value:', i.suggested_value);
+                    if (val) onAction(i.id, 'override', val);
+                  }}>Override</button>
+                  <button className="btn-reject" onClick={() => onAction(i.id, 'reject')}>Reject</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
 
+// --- Main App ---
+
 export default function App() {
+  const [view, setView] = useState('dashboard'); // dashboard, providers, detail, manual
+  const [selectedProviderId, setSelectedProviderId] = useState(null);
+  
   const [stats, setStats] = useState(null);
   const [providers, setProviders] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
-  const [providerDetail, setProviderDetail] = useState(null);
-  const [qa, setQa] = useState([]);
   const [manualItems, setManualItems] = useState([]);
 
-  const loadAll = async () => {
-    const [s, p, m] = await Promise.all([
-      axios.get('/stats'),
-      axios.get('/providers'),
-      axios.get('/manual-review'),
-    ]);
-    setStats(s.data);
-    setProviders(p.data);
-    setManualItems(m.data);
+  const loadData = async () => {
+    try {
+      const [s, p, m] = await Promise.all([
+        axios.get('/stats'),
+        axios.get('/providers'),
+        axios.get('/manual-review'),
+      ]);
+      setStats(s.data);
+      setProviders(p.data);
+      setManualItems(m.data.filter(i => i.status === 'pending'));
+    } catch (err) {
+      console.error("Error loading data", err);
+    }
   };
 
   useEffect(() => {
-    loadAll();
+    loadData();
   }, []);
 
-  useEffect(() => {
-    if (selectedId == null) return;
-    (async () => {
-      const [pd, q] = await Promise.all([
-        axios.get(`/providers/${selectedId}`),
-        axios.get(`/providers/${selectedId}/qa`),
-      ]);
-      setProviderDetail(pd.data);
-      setQa(q.data);
-    })();
-  }, [selectedId]);
-
   const runBatch = async () => {
-    await axios.post('/run-batch?type=daily');
-    await loadAll();
+    if (window.confirm("Run daily batch process? This may take a moment.")) {
+      await axios.post('/run-batch?type=daily');
+      await loadData();
+      alert("Batch run complete!");
+    }
   };
 
   const handleManualAction = async (id, action, value) => {
-    if (action === 'approve') {
-      await axios.post(`/manual-review/${id}/approve`);
-    } else {
-      await axios.post(`/manual-review/${id}/override?value=${encodeURIComponent(value)}`);
-    }
-    await loadAll();
-    if (selectedId != null) {
-      const [pd, q] = await Promise.all([
-        axios.get(`/providers/${selectedId}`),
-        axios.get(`/providers/${selectedId}/qa`),
-      ]);
-      setProviderDetail(pd.data);
-      setQa(q.data);
+    try {
+      if (action === 'approve') {
+        await axios.post(`/manual-review/${id}/approve`);
+      } else if (action === 'reject') {
+        await axios.post(`/manual-review/${id}/reject`);
+      } else {
+        await axios.post(`/manual-review/${id}/override?value=${encodeURIComponent(value)}`);
+      }
+      await loadData();
+    } catch (err) {
+      alert("Action failed");
     }
   };
 
+  const navigateToDetail = (id) => {
+    setSelectedProviderId(id);
+    setView('detail');
+  };
+
   return (
-    <div className="layout">
-      <header>
-        <h1>Provider Data Validation & Directory (Agentic AI)</h1>
-        <button onClick={runBatch}>Run Daily Batch</button>
-      </header>
-      <div className="grid">
-        <Dashboard stats={stats} />
-        <ProviderList providers={providers} onSelect={setSelectedId} />
-        <ProviderDetail provider={providerDetail} qa={qa} />
-        <ManualReview items={manualItems} onAction={handleManualAction} />
-      </div>
+    <div className="app-layout">
+      <aside className="sidebar">
+        <div className="brand">
+          <h2>EY Agentic AI</h2>
+          <p>Provider Directory</p>
+        </div>
+        <nav>
+          <button className={view === 'dashboard' ? 'active' : ''} onClick={() => setView('dashboard')}>Dashboard</button>
+          <button className={view === 'providers' ? 'active' : ''} onClick={() => setView('providers')}>Providers</button>
+          <button className={view === 'manual' ? 'active' : ''} onClick={() => setView('manual')}>
+            Manual Review 
+            {manualItems.length > 0 && <span className="badge-count">{manualItems.length}</span>}
+          </button>
+        </nav>
+        <div className="sidebar-footer">
+          <button className="btn-primary" onClick={runBatch}>Run Daily Batch</button>
+        </div>
+      </aside>
+
+      <main className="content">
+        {view === 'dashboard' && <Dashboard stats={stats} />}
+        {view === 'providers' && <ProviderList providers={providers} onSelect={navigateToDetail} />}
+        {view === 'detail' && <ProviderDetail providerId={selectedProviderId} onBack={() => setView('providers')} />}
+        {view === 'manual' && <ManualReview items={manualItems} onAction={handleManualAction} />}
+      </main>
     </div>
   );
 }
