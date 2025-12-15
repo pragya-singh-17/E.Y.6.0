@@ -2,6 +2,16 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import './styles.css';
 
+const API_BASE = 'http://127.0.0.1:8000';
+
+// =====================
+// 🔹 EXPLAIN API HELPER
+// =====================
+async function explainDecision(payload) {
+  const res = await axios.post(`${API_BASE}/explain`, payload);
+  return res.data; // { explanation }
+}
+
 // --- Components ---
 
 function Badge({ band, value }) {
@@ -22,6 +32,10 @@ function ProgressBar({ value, max = 100, color = '#4caf50' }) {
     </div>
   );
 }
+
+/* =====================
+   DASHBOARD (UNCHANGED)
+   ===================== */
 
 function Dashboard({ stats }) {
   if (!stats) return <div>Loading stats...</div>;
@@ -68,7 +82,7 @@ function Dashboard({ stats }) {
               <div key={key} className="chart-bar-row">
                 <span className="label">{key}</span>
                 <div className="bar-wrapper">
-                  <div className={`bar drift-${key.toLowerCase()}`} style={{ width: `${(val / maxDrift) * 100}%` }}></div>
+                  <div className={`bar drift-${key.toLowerCase()}`} style={{ width: `${(val / maxDrift) * 100}%` }} />
                   <span className="count">{val}</span>
                 </div>
               </div>
@@ -83,7 +97,7 @@ function Dashboard({ stats }) {
               <div key={key} className="chart-bar-row">
                 <span className="label">{key}</span>
                 <div className="bar-wrapper">
-                  <div className="bar pcs-bar" style={{ width: `${(val / maxPCS) * 100}%`, background: '#2196f3' }}></div>
+                  <div className="bar pcs-bar" style={{ width: `${(val / maxPCS) * 100}%`, background: '#2196f3' }} />
                   <span className="count">{val}</span>
                 </div>
               </div>
@@ -116,6 +130,10 @@ function Dashboard({ stats }) {
     </div>
   );
 }
+
+/* =====================
+   PROVIDER LIST
+   ===================== */
 
 function ProviderList({ providers, onSelect }) {
   return (
@@ -151,9 +169,18 @@ function ProviderList({ providers, onSelect }) {
   );
 }
 
+/* =====================
+   PROVIDER DETAIL
+   ===================== */
+
 function ProviderDetail({ providerId, onBack }) {
   const [data, setData] = useState(null);
   const [ocr, setOcr] = useState(null);
+
+  // 🔹 EXPLAIN STATE
+  const [explanations, setExplanations] = useState({});
+  const [loadingField, setLoadingField] = useState(null);
+  const [explainError, setExplainError] = useState(null);
 
   useEffect(() => {
     if (!providerId) return;
@@ -165,10 +192,42 @@ function ProviderDetail({ providerId, onBack }) {
 
   const { provider, validation, pcs, drift } = data;
 
+  // 🔹 EXPLAIN HANDLER
+  const handleExplain = async (field, info) => {
+    setLoadingField(field);
+    setExplainError(null);
+
+    try {
+      const payload = {
+        field,
+        current_value: provider[field],
+        candidates: (info.sources || []).map(s => ({
+          source: s.source,
+          value: s.value,
+        })),
+        chosen_value: provider[field],
+        confidence: info.confidence,
+        decision: info.confidence >= 0.7 ? 'auto_update' : 'manual_review',
+      };
+
+      const res = await explainDecision(payload);
+
+      setExplanations(prev => ({ ...prev, [field]: res.explanation }));
+    } catch (err) {
+      setExplainError(
+        err.response?.status === 429
+          ? 'Rate limit exceeded. Please wait.'
+          : 'Failed to generate explanation.'
+      );
+    } finally {
+      setLoadingField(null);
+    }
+  };
+
   return (
     <div className="detail-container">
       <button onClick={onBack} className="btn-back">← Back to Directory</button>
-      
+
       <div className="header-card card">
         <div className="header-info">
           <h1>{provider.name}</h1>
@@ -184,10 +243,12 @@ function ProviderDetail({ providerId, onBack }) {
       </div>
 
       <div className="detail-grid">
-        {/* Left Column: Validation & OCR */}
         <div className="left-col">
           <div className="card">
             <h3>✅ Validated Data & Confidence</h3>
+
+            {explainError && <div className="error-banner">{explainError}</div>}
+
             <table className="validation-table">
               <thead>
                 <tr>
@@ -199,27 +260,52 @@ function ProviderDetail({ providerId, onBack }) {
               </thead>
               <tbody>
                 {Object.entries(validation).map(([field, info]) => (
-                  <tr key={field}>
-                    <td>{field}</td>
-                    <td>{provider[field]}</td>
-                    <td>
-                      <div className="confidence-wrapper">
-                        <ProgressBar value={info.confidence * 100} color={info.confidence >= 0.7 ? '#4caf50' : '#ff9800'} />
-                        <span>{(info.confidence * 100).toFixed(0)}%</span>
-                      </div>
-                    </td>
-                    <td>
-                      {info.confidence >= 0.7 ? 
-                        <span className="badge-green">Auto-Updated</span> : 
-                        <span className="badge-red">Manual Review</span>
-                      }
-                    </td>
-                  </tr>
+                  <React.Fragment key={field}>
+                    <tr>
+                      <td>{field}</td>
+                      <td>{provider[field]}</td>
+                      <td>
+                        <div className="confidence-wrapper">
+                          <ProgressBar
+                            value={info.confidence * 100}
+                            color={info.confidence >= 0.7 ? '#4caf50' : '#ff9800'}
+                          />
+                          <span>{(info.confidence * 100).toFixed(0)}%</span>
+                        </div>
+                      </td>
+                      <td>
+                        {info.confidence >= 0.7
+                          ? <span className="badge-green">Auto-Updated</span>
+                          : <span className="badge-red">Manual Review</span>}
+
+                        <div style={{ marginTop: '6px' }}>
+                          <button
+                            className="btn-small"
+                            disabled={loadingField === field}
+                            onClick={() => handleExplain(field, info)}
+                          >
+                            {loadingField === field ? 'Explaining…' : 'Explain'}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {explanations[field] && (
+                      <tr>
+                        <td colSpan="4">
+                          <div className="explanation-box">
+                            {explanations[field]}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
           </div>
 
+          {/* OCR PANEL */}
           <div className="card">
             <h3>📄 Document Extraction Panel (OCR)</h3>
             {ocr && ocr.exists ? (
@@ -236,34 +322,35 @@ function ProviderDetail({ providerId, onBack }) {
               <p>No documents found for this provider.</p>
             )}
           </div>
-          
+
+          {/* SOURCE COMPARISON */}
           <div className="card">
-             <h3>🔍 Source Comparison</h3>
-             <p>Reliability Weights: NPI (High), State Board (High), Hospital (Med), Maps (Low)</p>
-             <table className="source-table">
-                <thead>
-                    <tr>
-                        <th>Field</th>
-                        <th>Source</th>
-                        <th>Value Found</th>
+            <h3>🔍 Source Comparison</h3>
+            <p>Reliability Weights: NPI (High), State Board (High), Hospital (Med), Maps (Low)</p>
+            <table className="source-table">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Source</th>
+                  <th>Value Found</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(validation).map(([field, info]) =>
+                  (info.sources || []).map((src, idx) => (
+                    <tr key={`${field}-${idx}`}>
+                      <td>{field}</td>
+                      <td>{src.source}</td>
+                      <td>{src.value}</td>
                     </tr>
-                </thead>
-                <tbody>
-                    {Object.entries(validation).map(([field, info]) => (
-                        (info.sources || []).map((src, idx) => (
-                            <tr key={`${field}-${idx}`}>
-                                <td>{field}</td>
-                                <td>{src.source}</td>
-                                <td>{src.value}</td>
-                            </tr>
-                        ))
-                    ))}
-                </tbody>
-             </table>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Right Column: PCS Breakdown */}
+        {/* RIGHT COLUMN */}
         <div className="right-col">
           <div className="card">
             <h3>🛡️ PCS Breakdown</h3>
@@ -286,6 +373,10 @@ function ProviderDetail({ providerId, onBack }) {
     </div>
   );
 }
+
+/* =====================
+   MANUAL REVIEW
+   ===================== */
 
 function ManualReview({ items, onAction }) {
   return (
@@ -330,12 +421,14 @@ function ManualReview({ items, onAction }) {
   );
 }
 
-// --- Main App ---
+/* =====================
+   MAIN APP
+   ===================== */
 
 export default function App() {
-  const [view, setView] = useState('dashboard'); // dashboard, providers, detail, manual
+  const [view, setView] = useState('dashboard');
   const [selectedProviderId, setSelectedProviderId] = useState(null);
-  
+
   const [stats, setStats] = useState(null);
   const [providers, setProviders] = useState([]);
   const [manualItems, setManualItems] = useState([]);
@@ -351,7 +444,7 @@ export default function App() {
       setProviders(p.data);
       setManualItems(m.data.filter(i => i.status === 'pending'));
     } catch (err) {
-      console.error("Error loading data", err);
+      console.error('Error loading data', err);
     }
   };
 
@@ -360,10 +453,10 @@ export default function App() {
   }, []);
 
   const runBatch = async () => {
-    if (window.confirm("Run daily batch process? This may take a moment.")) {
+    if (window.confirm('Run daily batch process? This may take a moment.')) {
       await axios.post('/run-batch?type=daily');
       await loadData();
-      alert("Batch run complete!");
+      alert('Batch run complete!');
     }
   };
 
@@ -377,8 +470,8 @@ export default function App() {
         await axios.post(`/manual-review/${id}/override?value=${encodeURIComponent(value)}`);
       }
       await loadData();
-    } catch (err) {
-      alert("Action failed");
+    } catch {
+      alert('Action failed');
     }
   };
 
@@ -398,7 +491,7 @@ export default function App() {
           <button className={view === 'dashboard' ? 'active' : ''} onClick={() => setView('dashboard')}>Dashboard</button>
           <button className={view === 'providers' ? 'active' : ''} onClick={() => setView('providers')}>Providers</button>
           <button className={view === 'manual' ? 'active' : ''} onClick={() => setView('manual')}>
-            Manual Review 
+            Manual Review
             {manualItems.length > 0 && <span className="badge-count">{manualItems.length}</span>}
           </button>
         </nav>
